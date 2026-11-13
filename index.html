@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>說了就打</title>
+<meta name="description" content="按一下說話，直接變成文字，複製貼到任何地方。">
+<meta name="theme-color" content="#0f766e" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b1413" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="說了就打">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>說了就打</h1>
+    <div class="seg" role="tablist" aria-label="辨識引擎">
+      <button id="engCloud" role="tab" type="button">雲端</button>
+      <button id="engBuiltin" role="tab" type="button">內建</button>
+    </div>
+    <button id="btnSettings" class="icon-btn" type="button" aria-label="設定">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+
+  <main>
+    <section class="card">
+      <textarea id="text" placeholder="按下方的麥克風開始說話。&#10;說完再按一次，文字會出現在這裡。" spellcheck="false"></textarea>
+      <div class="meta">
+        <span id="status" role="status" aria-live="polite">準備好了</span>
+        <span id="count">0 字</span>
+      </div>
+    </section>
+
+    <div class="actions">
+      <button id="btnCopy" class="btn primary" type="button">複製</button>
+      <button id="btnPolish" class="btn" type="button">潤飾</button>
+      <button id="btnShare" class="btn" type="button">分享</button>
+      <button id="btnClear" class="btn ghost" type="button">清除</button>
+    </div>
+
+    <details class="history" id="historyBox">
+      <summary>最近紀錄 <span id="histCount"></span></summary>
+      <ul id="histList"></ul>
+      <button id="btnHistClear" class="btn ghost small" type="button">清空紀錄</button>
+    </details>
+  </main>
+
+  <footer class="dock">
+    <button id="btnCancel" class="btn ghost" type="button" hidden>取消</button>
+    <button id="btnMic" class="mic" type="button" aria-label="開始錄音">
+      <svg class="i-mic" viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4"/></svg>
+      <svg class="i-stop" viewBox="0 0 24 24" width="30" height="30" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>
+      <span class="spinner" aria-hidden="true"></span>
+    </button>
+    <span id="timer" class="timer" hidden>0:00</span>
+  </footer>
+</div>
+
+<div id="toast" class="toast" role="alert" hidden></div>
+
+<dialog id="dlg">
+  <form method="dialog" class="sheet">
+    <div class="sheet-head">
+      <h2>設定</h2>
+      <button class="icon-btn" value="close" aria-label="關閉">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+
+    <h3>雲端辨識</h3>
+    <label>服務
+      <select id="sPreset">
+        <option value="groq">Groq</option>
+        <option value="openai">OpenAI</option>
+        <option value="custom">自訂（OpenAI 相容）</option>
+      </select>
+    </label>
+    <label>API 位址
+      <input id="sBase" type="url" inputmode="url" autocapitalize="off" autocomplete="off" placeholder="https://…/v1">
+    </label>
+    <label>API key
+      <input id="sKey" type="password" autocapitalize="off" autocomplete="off" placeholder="貼上你的 API key">
+    </label>
+    <p class="hint">Key 只存在這支手機的瀏覽器裡，錄音與文字只會直接送到你選的服務。</p>
+    <label>辨識模型
+      <input id="sStt" list="modelList" autocapitalize="off" autocomplete="off">
+    </label>
+    <label>潤飾模型
+      <input id="sChat" list="modelList" autocapitalize="off" autocomplete="off">
+    </label>
+    <datalist id="modelList"></datalist>
+    <button id="btnModels" class="btn small" type="button">用這組 key 測試並載入模型清單</button>
+    <p id="modelMsg" class="hint"></p>
+
+    <label>主要語言
+      <select id="sLang">
+        <option value="zh">中文（可夾英文）</option>
+        <option value="">自動偵測</option>
+        <option value="en">英文</option>
+      </select>
+    </label>
+    <label>常用詞彙（專有名詞、人名、縮寫，用頓號或逗號分隔）
+      <textarea id="sVocab" rows="2" placeholder="例如：HbA1c、SGLT2、家醫科"></textarea>
+    </label>
+
+    <h3>內建辨識</h3>
+    <label>語言
+      <select id="sBuiltinLang">
+        <option value="zh-TW">中文（台灣）</option>
+        <option value="en-US">English (US)</option>
+      </select>
+    </label>
+    <p class="hint">內建辨識免費、邊說邊出字，但中英夾雜較弱，部分手機或瀏覽器不支援。</p>
+
+    <h3>行為</h3>
+    <label class="check"><input id="sAutoCopy" type="checkbox"> 辨識完自動複製</label>
+    <label class="check"><input id="sToTrad" type="checkbox"> 簡體字自動轉繁體</label>
+    <label class="check"><input id="sAppend" type="checkbox"> 接續上一段（不清空原本文字）</label>
+
+    <button class="btn primary" value="close">完成</button>
+    <p class="hint ver">說了就打 v1.0</p>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
