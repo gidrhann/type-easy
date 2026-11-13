@@ -12,7 +12,7 @@ const el = {
 /* ---------- 設定 ---------- */
 
 const PRESETS = {
-  groq: { base: 'https://api.groq.com/openai/v1', stt: 'whisper-large-v3-turbo', chat: 'llama-3.3-70b-versatile' },
+  groq: { base: 'https://api.groq.com/openai/v1', stt: 'whisper-large-v3-turbo', chat: 'openai/gpt-oss-120b' },
   openai: { base: 'https://api.openai.com/v1', stt: 'gpt-4o-mini-transcribe', chat: 'gpt-4o-mini' },
   custom: { base: '', stt: '', chat: '' },
 };
@@ -237,9 +237,24 @@ const POLISH_SYSTEM = [
   '只輸出整理後的文字本身，不要標籤、引號或任何說明。',
 ].join('\n');
 
-async function polishText(text) {
-  const p = provider();
-  const res = await fetch(`${p.base.replace(/\/+$/, '')}/chat/completions`, {
+// 服務商會不定期下架模型。潤飾模型失效時，從該帳號目前可用的清單自動改選一個。
+const CHAT_PREFERENCE = [/gpt-oss-120b/, /gpt-oss-20b/, /llama.*70b/, /gpt-.*mini/, /llama/, /gpt/, /qwen/, /gemma/];
+const NOT_CHAT = /whisper|transcribe|tts|speech|audio|embed|guard|moderation|image|realtime|compound|orpheus|safeguard/i;
+
+async function pickChatModel(p) {
+  const res = await fetch(`${p.base.replace(/\/+$/, '')}/models`, { headers: { Authorization: `Bearer ${p.key}` } });
+  if (!res.ok) return null;
+  const ids = ((await res.json()).data || []).filter((m) => m.active !== false).map((m) => m.id)
+    .filter((id) => !NOT_CHAT.test(id) && id !== p.chat);
+  for (const pattern of CHAT_PREFERENCE) {
+    const hit = ids.find((id) => pattern.test(id));
+    if (hit) return hit;
+  }
+  return ids[0] || null;
+}
+
+function chatRequest(p, text) {
+  return fetch(`${p.base.replace(/\/+$/, '')}/chat/completions`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${p.key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -250,6 +265,20 @@ async function polishText(text) {
       ],
     }),
   });
+}
+
+async function polishText(text) {
+  const p = provider();
+  let res = await chatRequest(p, text);
+  if (res.status === 404 || (res.status === 400 && /model/i.test(await res.clone().text()))) {
+    const replacement = await pickChatModel(p).catch(() => null);
+    if (replacement) {
+      p.chat = replacement;
+      saveSettings();
+      toast(`原本的潤飾模型已下架，改用 ${replacement}`, 4000);
+      res = await chatRequest(p, text);
+    }
+  }
   if (!res.ok) throw new Error(await apiError(res));
   const data = await res.json();
   const out = (data.choices?.[0]?.message?.content || '').trim();
